@@ -197,7 +197,6 @@ if __name__=='__main__':
     https://scispace.com/pdf/training-hidden-markov-models-with-multiple-observations-a-46jcjwd03b.pdf
     - Baum-Welch algorithm for multiple observation
     '''
-
     tags_vocab = Tags(training_tags)
     vocab = Vocabulary(training_sentences)
     training_x, training_z = preprocess_data(training_sentences, training_tags, vocab, tags_vocab)
@@ -206,15 +205,17 @@ if __name__=='__main__':
     K = len(tags_vocab)
     vocab_size = len(vocab)
 
-    pi_init = np.ones((K, )) / K
-    A_init = np.ones((K, K)) / K
-    B_init = np.ones((K, vocab_size)) / vocab_size
+    seed = 2
+    rng = np.random.default_rng(seed)
+    pi_init = rng.random(K)
+    pi_init /= pi_init.sum()
+    A_init = rng.random((K, K))
+    A_init /= A_init.sum(axis=1, keepdims=True)
+    B_init = rng.random((K, vocab_size))
+    B_init /= B_init.sum(axis=1, keepdims=True)
 
     pi_cap, A_cap, B_cap = EM(pi_init, A_init, B_init, training_x)
     best_states = Viterbi(pi_cap, A_cap, B_cap, training_x)
-
-    print(pi_cap, '\n')
-    print(best_states)
 
     '''
     1. conf dodaj A_init, B_init...
