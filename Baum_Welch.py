@@ -1,181 +1,222 @@
 import numpy as np
 from data import *
 from preprocessing import *
+from config import *
 
 
-def forward(pi, A, B, q):
+def forward(pi, A, B, x):
     '''
-    Compute alpha_t(id(tag)) defined as:
-    alpha_t(tag) = P{x_0, x_1, ..., x_t, Z_t=tag | pi, A, B}
+    Compute alpha_t(z) defined as:
+    alpha_b,t(z) = P{x_0, x_1, ..., x_t, Z_t=z | pi, A, B}
     recursively
-    given the query (observations, sentence) q = [x_0, x_1, ..., x_T-1]
-    and parameters pi, A and B
+    given the batch b of observations x = [x1, ..., xB]
+    and model parameters pi, A and B
 
     :param pi: initial probabilities
     :param A: transition probabilities
     :param B: emission probabilities
-    :param q: query (observations)
+    :param x (np.ndarray): batch of training data (numericized sentences)
 
-    :return: alpha[t][id(tag)] for all t=0..T-1 and for each tag in tags
+    :return: alpha[b][t][z] for all b=0..batch_size-1, t=0..T-1 and for each z in preprocessed tags
     '''
-    T = len(q)
+    batch_size, T = x.shape
     K = len(pi)
-    alpha = np.ones((T, K))
 
-    for t in range(T):
-        if t == 0:
-            alpha[t,:] = pi * B[:,q[0]]
-        else:
-            for k in range(K):
-                alpha[t, k] = np.matmul(alpha[t - 1], A[:, k]) * B[k, q[t]]
+    alpha = np.ones((batch_size, T, K))
+
+    alpha[:, 0, :] = pi * B[:, x[:, 0]].T
+    for t in range(1, T):
+        alpha[:, t, :] = (alpha[:, t-1, :] @ A) * B[:, x[:, t]].T
+
     return alpha
 
 
-def backward(pi, A, B, q):
+def backward(pi, A, B, x):
     '''
     Backward algorithm compute beta[t][tag] defined as:
     beta[t][tag] = P{x_t+1, x_t+2, ..., x_T | Z_t = tag, pi, A, B}
     recursively
-    given the query (observations) q = [x_0, x_1, ..., x_T-1]
-    and parameters pi, A and B
+    given the batch b of observations x = [x1, ..., xB]
+    and model parameters pi, A and B
 
     :param pi: initial probabilities
     :param A: transition probabilities
     :param B: emission probabilities
-    :param q: query (observations)
-    :return: beta[t][tag] for all t=0..T-1 and for each tag in tags
+    :param x (np.ndarray): batch of training data (numericized sentences)
+    :return: beta[b][t][tag] for all b=0..batch_size-1, t=0..T-1 and for each tag in tags
     '''
-    T = len(q)
+    batch_size, T = x.shape
     K = len(pi)
-    beta = np.ones((T, K))
 
-    for t in reversed(range(T)):
-        if t < T-1:
-            for i in range(K):
-                beta[t, i] = np.matmul(A[i, :] * B[:, q[t+1]], beta[t+1, :])
+    beta = np.ones((batch_size, T, K))
+    for t in reversed(range(T-1)):
+        beta[:, t, :] = (A @ (B[:, x[:, t + 1]] * beta[:, t + 1, :].T)).T
     return beta
 
 
-def Viterbi(pi, A, B, q):
+def Viterbi(pi, A, B, x):
     '''
-    Viterbi algorithm predicts "the best" states z_0*, z_1*, ..., z_T-1*
-    given the observations (query) q = [x_0, x_1, ..., x_T-1]
-    and model parameters A, B and pi.
+    Viterbi algorithm predicts "the best" states z_b,0*, z_b,1*, ..., z_b,T-1*
+    for evry observation in batch of observations x,
+    given the model parameters A, B and pi.
+
     The best states z_0*, z_1*, ..., z_T-1*
     maximize the complete log likelihood:
-    z_0*, ..., z_T-1* = argmax_{z_0, ..., z_T-1} P{X=q, z_0, ..., z_T-1 | pi, A, B}
+    z_b,0*, ..., z_b,T-1* = argmax_{z_0, ..., z_T-1} P{X=x_b, z_0, ..., z_T-1 | pi, A, B}
 
     :param pi: initial probabilities
     :param A: transition probabilities
     :param B: emission probabilities
-    :param q: query (observations)
+    :param x: batch of observations
 
-    :return: path = [z_0*, ..., z_T-1*]
+    :return: the best paths
     '''
-    T = len(q)
+    batch_size, T = x.shape
     K = len(pi)
-    v = np.zeros((T, K))
-    b = np.zeros((T, K))
 
-    for t in range(T):
-        if t == 0:
-            v[t, :] = pi[:] * B[:, q[t]]
-        else:
-            for j in range(K):
-                p = B[j, q[t]] * (v[t - 1, :] * A[:, j])
-                v[t, j], b[t, j] = np.max(p), np.argmax(p)
-    s = int(np.argmax(v[T - 1, :]))
-    path = [s]
-    for t in reversed(range(T)):
-        if t > 0:
-            s = int(b[t, s])
-            path.append(s)
-        else:
-            break
-    path.reverse()
-    return np.array(path)
+    # delta: best score up to time t in state i
+    delta = np.zeros((batch_size, T, K))
+    # psi: backpointers
+    psi = np.zeros((batch_size, T, K), dtype=int)
+
+    delta[:, 0, :] = pi * B[:, x[:, 0]].T  # shape (B, N)
+    psi[:, 0, :] = 0
+
+    for t in range(1, T):
+        # Expand delta[:, t-1, :] to (B, N, 1)
+        prev = delta[:, t - 1, :][:, :, None]  # shape (B, N, 1)
+
+        # Transition: prev * A
+        scores = prev * A[None, :, :]  # shape (B, N, N)
+
+        # Max over previous states
+        psi[:, t, :] = np.argmax(scores, axis=1)  # best prev state
+        delta[:, t, :] = np.max(scores, axis=1) * B[:, x[:, t]].T
+
+    # Best final states
+    best_states = np.zeros((batch_size, T), dtype=int)
+    for b in range(batch_size):
+        best_states[b, T - 1] = np.argmax(delta[b, T - 1, :])
+
+    # Backtrack
+    for b in range(batch_size):
+        for t in reversed(range(T - 2)):
+            next_state = best_states[b, t + 1]
+            best_states[b, t] = psi[b, t + 1, next_state]
+
+    return best_states
 
 
-def e_step(A, alpha, beta):
+def gamma(alpha, beta):
     '''
-    Algorithm calculate xi_t(id(tag_1), id(tag_2))
-    and gamma_t(id(tag)) defined as:
-        - xi_t(id(tag_1), id(tag_2)) = P{ Z_t = tag_1, Z_t+1 = tag_2| X = q, pi, A, B}.
-          xi_t(tag_1, tag_2) is probability that tag_1 is hidden state at time step t
-          and tag_2 is hidden state at time step t+1, given model parameters
-        - gamma_t(id(tag)) = P{Z_t = tag | pi, A, B}
-          gamma_t(id(tag)) is probability that tag is hidden state
-          at time step t, given model parameters
-    the observations (query) q = [x_0, x_1, ..., x_T-1].
-
-    :param A: transition probabilities
-    :param alpha: result of forward algorihm
-    :param beta: result of backward algorihm
-
-    :return: xi, gamma
+    Algorithm returns (batch_size, T, K) tensor defined as:
+    gamma[b][t][k] = E[Z_b,t,k = 1 | pi, A, B]
     '''
-    T = alpha.shape[0]
-    K = A.shape[0]
-
-    xi = np.zeros((T-1, K, K))
-    gamma = np.zeros((T, K))
-
-    for t in range(T):
-        p = np.matmul(alpha[t, :], beta[t, :])
-        gamma[t] = (alpha[t, :] * beta[t, :]) / p
-        if t < T-1:
-            for i in range(K):
-                for j in range(K):
-                    xi[t, i, j] = alpha[t,i] * A[i,j] * B[j, q[t+1]] * beta[t+1, j]
-                    xi[t, i, j] /= p
-    return gamma, xi
+    gamma = alpha * beta  # (M, T, N)
+    gamma /= gamma.sum(axis=2, keepdims=True)  # normalize over hidden states
+    return gamma
 
 
-def m_step(xi, gamma, q, vocab_size):
+def xi(A, B, x, alpha, beta):
     '''
-
-    :param xi:
-    :param gamma:
-    :return:
+    Algorithm calculates
+    xi[b, t, i, j] = E[Z_b,t,i = 1, Z_b,t+1,j = 1| pi, A, B]
     '''
-    T = xi.shape[0]
-    K = xi.shape[1]
+    batch_size, T = x.shape
+    K = alpha.shape[2]
 
-    pi_cap = np.zeros((K,))
-    A_cap = np.zeros((K, K))
+    xi = np.zeros((batch_size, T - 1, K, K))
+
+    for t in range(T - 1):
+        # emission probs for next obs, shape (M, N)
+        B_next = B[:, x[:, t + 1]].T  # (M, N)
+
+        # combine beta with emissions
+        temp = beta[:, t + 1, :] * B_next  # (M, N)
+
+        # alpha_t @ A gives (M, N, N) after broadcasting
+        xi[:, t, :, :] = alpha[:, t, :, None] * A[None, :, :] * temp[:, None, :]
+
+        # normalize per sequence
+        xi[:, t, :, :] /= xi[:, t, :, :].sum(axis=(1, 2), keepdims=True)
+
+        return xi
+
+
+def m_step(xi, gamma, x, vocab_size):
+    '''
+    Assumprton: Individual observations are independent of each other.
+    '''
+    batch_size, T, K = gamma.shape
+
+    pi_cap = np.mean([gamma[b][0] for b in range(batch_size)], axis=0)  # shape (K,)
+
+    xi_sum = np.sum([xi[b].sum(axis=0) for b in range(batch_size)], axis=0)  # (K, K)
+    gamma_sum = np.sum([gamma[b][:-1].sum(axis=0) for b in range(batch_size)], axis=0)  # (K,)
+    A_cap = xi_sum / gamma_sum[:, None]  # normalize row-wise, shape (K, K)
+
     B_cap = np.zeros((K, vocab_size))
+    for v in range(vocab_size):
+        # Mask where observation equals symbol v
+        mask = (x == v)  # shape (batch_size, T), True where obs = v
 
-    pi_cap = gamma[0, :]
+        # Numerator: sum gamma over those times
+        numer = 0
+        denom = 0
+        for b in range(batch_size):
+            numer += gamma[b][:T][mask[b, :T]].reshape(-1, K).sum(axis=0)
+            denom += gamma[b][:T].sum(axis=0)
+        B_cap[:, v] = numer / denom
 
-    A_cap = np.sum(xi, axis=0)
-    A_cap /= np.sum(A_cap, axis=1, keepdims=True)
-
-    for k in range(K):
-        for i in range(vocab_size):
-            B_cap[k, i] = 0
-            for t in range(T):
-                B_cap[k, i] += gamma[t, k] * int(q[t] == k)
-    B_cap /= np.sum(B_cap, axis=1, keepdims=True)
     return pi_cap, A_cap, B_cap
 
+
+def EM(pi_init, A_init, B_init, x):
+    pi_curr, A_curr, B_curr = pi_init, A_init, B_init
+    for iter in range(50):
+        # E step
+        alpha_curr = forward(pi_curr, A_curr, B_curr, x)
+        beta_curr = backward(pi_curr, A_curr, B_curr, x)
+        gamma_curr = gamma(alpha_curr, beta_curr)
+        xi_curr = xi(A_curr, B_curr, x, alpha_curr, beta_curr)
+
+        # M step
+        pi_curr, A_curr, B_curr = m_step(xi_curr, gamma_curr, x, vocab_size)
+    return pi_curr, A_curr, B_curr
+
 if __name__=='__main__':
+    '''
+    Recources:
+    1. Hidden Markov Models
+    https://web.stanford.edu/~jurafsky/slp3/A.pdf
+    - Elements of HMMs
+    - Forward-backward algorithm (for single observation)
+    - Baum-Welch algorithm (for single observation)
+    
+    2. Training Hidden Markov Models with Multiple Observations – A Combinatorial Method
+    https://scispace.com/pdf/training-hidden-markov-models-with-multiple-observations-a-46jcjwd03b.pdf
+    - Baum-Welch algorithm for multiple observation
+    '''
 
-    # On HMMs: https://web.stanford.edu/~jurafsky/slp3/A.pdf
+    tags_vocab = Tags(training_tags)
+    vocab = Vocabulary(training_sentences)
+    training_x, training_z = preprocess_data(training_sentences, training_tags, vocab, tags_vocab)
 
-    tags = Tags(annotations)
-    K = len(tags)  # number of possible hidden states (tags)
+    batch_size, T = training_x.shape
+    K = len(tags_vocab)
+    vocab_size = len(vocab)
 
-    alpha = forward(pi, A, B, q)
-    beta = backward(pi, A, B, q)
-    path = Viterbi(pi, A, B, q)
+    pi_init = np.ones((K, )) / K
+    A_init = np.ones((K, K)) / K
+    B_init = np.ones((K, vocab_size)) / vocab_size
 
-    gamma, xi = e_step(A, alpha, beta)
-    pi_cap, A_cap, B_cap = m_step(xi, gamma, q, vocab_size)
-    print(f'{pi_cap=}', '\n')
-    print(f'{A_cap=}', '\n')
+    pi_cap, A_cap, B_cap = EM(pi_init, A_init, B_init, training_x)
+    best_states = Viterbi(pi_cap, A_cap, B_cap, training_x)
+
+    print(pi_cap, '\n')
+    print(best_states)
 
     '''
-    0. Kako ovo uci iz batch-a primera?
     1. conf dodaj A_init, B_init...
     2. uradi jedan EM algoritam i analiziraj rezutate
     3. napisi komentare
