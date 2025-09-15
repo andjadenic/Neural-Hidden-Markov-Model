@@ -1,239 +1,186 @@
-import numpy as np
-from data import *
-from preprocessing import *
-from config import *
+import torch
+import torch.nn as nn
 
 
-def forward(pi, A, B, x):
+def normalize(x, dim):
+    norm = x.sum(dim=dim, keepdim=True)
+    norm[norm == 0] = 1
+    x.div_(norm)
+    return norm
+
+
+class BaumWelch(nn.Module):
+    def __init__(self, observations, pad_idx, init_log_parameters):
+        super(BaumWelch, self).__init__()
+
+        self.init_log_pi, self.init_log_A, self.init_log_B = init_log_parameters
+        self.log_pi = self.init_log_pi
+        self.log_A = self.init_log_A
+        self.log_B = self.init_log_B
+        self.log_parameters = init_log_parameters
+
+        self.observations = observations
+        self.tokens = set(observations.flatten().tolist())
+        self.V = len(self.tokens)
+
+        self.pad_id = pad_idx
+
+        self.K = self.init_log_pi.shape[0]  # number of all possible hidden states
+        self.Nb, self.T = self.observations.shape  # batch size, max sequence length
+
+        # For message passing algorithm
+        # Unnormalized values of alpha, beta, gamma and eta in log space
+        self.log_alpha = torch.zeros(Nb, T, K)
+        self.log_beta = torch.zeros(Nb, T, K)
+        self.log_gamma = torch.zeros(Nb, T, K)
+        self.log_xi = torch.zeros(Nb, T, K, K)
+
+
+    def e_step(self):
+        '''
+        Function runs forward-backward algorithm
+        calculate alpha, beta, gamma and eta
+        (unnormalized in log space)
+        for each observation in the given batch
+        and for given model parameters (pi, A, B).
+        '''
+        log_pi, log_A, log_B = self.log_parameters
+
+        # Forward-Backward algorithm
+
+        # Calculating alpha
+        log_alpha = torch.zeros(Nb, T, K)
+        # Initialization
+        log_alpha[:, 0, :] = log_pi + log_B[:, observations[:, 0]].T
+        # Induction
+        for t in range(1, T):
+            p = log_alpha[:, t - 1, :].unsqueeze(1) + log_A.T.unsqueeze(0)
+            log_alpha[:, t, :] = log_B[:, observations[:, t]].T + torch.logsumexp(p, dim=2)
+        self.log_alpha = log_alpha
+
+        # Calculating beta
+        # Initialization
+        log_beta = torch.zeros((Nb, T, K))
+        # Recursion
+        for t in reversed(range(T - 1)):
+            p = log_A.unsqueeze(0) + log_B[:, observations[:, t + 1]].T.unsqueeze(1) + log_beta[:, t + 1, :].unsqueeze(1)
+            log_beta[:, t, :] = torch.logsumexp(p, dim=2)
+        self.log_beta = log_beta
+
+        # Calculating gamma
+        log_gamma = log_alpha + log_beta
+        log_gamma -= torch.logsumexp(log_gamma, dim=2, keepdim=True)  # normalization
+        self.log_gamma = log_gamma
+
+        # Calculating eta
+        log_xi = torch.ones((Nb, T, K, K))
+        for t in range(T - 1):
+            p = (
+                    log_alpha[:, t, :].unsqueeze(2)
+                    + log_A.unsqueeze(0)
+                    + log_B[:, observations[:, t + 1]].T.unsqueeze(1)
+                    + log_beta[:, t + 1, :].unsqueeze(1)
+            )  # (Nb, K, K)
+            log_xi[:, t, :, :] = p - torch.logsumexp(p.view(Nb, -1), dim=1)[:, None, None]
+        self.log_xi = log_xi
+
+
+    def m_step(self):
+        '''
+        M-step in Baum-Welch algorithm for batch of observation
+        assuming observations are independent
+        is done by averaging results acros batches.
+
+        Recource:
+        Training Hidden Markov Models with Multiple Observations – A Combinatorial Method
+        https://scispace.com/pdf/training-hidden-markov-models-with-multiple-observations-a-46jcjwd03b.pdf
+        '''
+        # Pi update
+        log_pi_cap = torch.logsumexp(self.log_gamma[:, 0, :], dim=0)  # sum over all batches
+        log_pi_cap -= torch.logsumexp(log_pi_cap, dim=0)  # normalization
+        self.log_pi = log_pi_cap
+
+        # A update
+        log_A_cap = torch.logsumexp(self.log_xi, dim=(0, 1))  # (K, K)
+        log_A_cap -= (torch.logsumexp(self.log_gamma[:, :-1, :], dim=(0, 1))).unsqueeze(dim=1)
+        log_A_cap -= torch.logsumexp(log_A_cap, dim=1, keepdim=True)  # normalization
+        self.log_A = log_A_cap
+
+        # B update
+        Nb, T = self.observations.shape
+        K, V = self.K, self.V
+
+        # One-hot encode observations
+        obs_mask = torch.zeros((Nb, T, V))
+        obs_mask.scatter_(2, self.observations.unsqueeze(-1), 1.0)
+
+        # Remove pad_idx influence
+        obs_mask[:, :, self.pad_id] = 0
+
+        # Expand gamma for broadcasting
+        log_gamma_expanded = self.log_gamma.unsqueeze(-1)  # (Nb, T, K, 1)
+
+        # Expected emission counts for each state k and vocab v
+        log_B_num = torch.logsumexp(
+            log_gamma_expanded + obs_mask.unsqueeze(2).log(),  # (Nb, T, K, V)
+            dim=(0, 1)
+        )  # (K, V)
+
+        # Total expected counts per state, ignoring pads
+        gamma_masked = self.log_gamma.masked_fill(
+            self.observations.eq(self.pad_id).unsqueeze(-1),
+            float("-inf")
+        )
+        log_B_den = torch.logsumexp(gamma_masked, dim=(0, 1)).unsqueeze(1)  # (K, 1)
+
+        # Normalized log-probs
+        log_B_cap = log_B_num - log_B_den
+
+        # Force pad_idx emissions to -inf (impossible)
+        log_B_cap[:, self.pad_id] = float("-inf")
+
+        self.log_B = log_B_cap
+
+        # Update parameters
+        self.log_parameters = (self.log_pi, self.log_A, self.log_B)
+
+
+
+if __name__ == "__main__":
     '''
-    Compute alpha_t(z) defined as:
-    alpha_b,t(z) = P{x_0, x_1, ..., x_t, Z_t=z | pi, A, B}
-    recursively
-    given the batch b of observations x = [x1, ..., xB]
-    and model parameters pi, A and B
+        Recources:
+        1. Hidden Markov Models
+        https://web.stanford.edu/~jurafsky/slp3/A.pdf
+        - Elements of HMMs
+        - Forward-backward algorithm (for single observation)
+        - Baum-Welch algorithm (for single observation)
 
-    :param pi: initial probabilities
-    :param A: transition probabilities
-    :param B: emission probabilities
-    :param x (np.ndarray): batch of training data (numericized sentences)
+        2. Training Hidden Markov Models with Multiple Observations – A Combinatorial Method
+        https://scispace.com/pdf/training-hidden-markov-models-with-multiple-observations-a-46jcjwd03b.pdf
+        - Baum-Welch algorithm for multiple observation
+        
+        3. Explanation of log-sum-exp trick:
+        https://www.youtube.com/watch?v=-RVM21Voo7Q&list=PLsmUMh77gCCpFLcWtohvl5oNuQknAkqYi&index=12
+        '''
 
-    :return: alpha[b][t][z] for all b=0..batch_size-1, t=0..T-1 and for each z in preprocessed tags
-    '''
-    batch_size, T = x.shape
-    K = len(pi)
+    # Example
+    Nb = 2  # batch size
+    K = 3  # number of all possible hidden states
+    T = 4  # max number of time steps
+    V = 5  # vocabulary size
 
-    alpha = np.ones((batch_size, T, K))
+    init_log_pi = torch.tensor([-10, -20, -300], dtype=torch.float)
+    init_log_A = torch.tensor([[-10, -10, -10],
+                                    [-200, -100, -155.5],
+                                    [-230, -10000, -55]], dtype=torch.float)
+    init_log_B = torch.tensor([[-10, -10, -10, -10, -10, ],
+                                    [-210, -310, -410, -510, -610],
+                                    [-210, -210, -210, -110, -110]], dtype=torch.float)
+    init_log_parameters = (init_log_pi, init_log_A, init_log_B)
 
-    alpha[:, 0, :] = pi * B[:, x[:, 0]].T
-    for t in range(1, T):
-        alpha[:, t, :] = (alpha[:, t-1, :] @ A) * B[:, x[:, t]].T
+    observations = torch.tensor([[2, 2, 0, 0],
+                                      [3, 2, 1, 1]], dtype=torch.long)
 
-    return alpha
-
-
-def backward(pi, A, B, x):
-    '''
-    Backward algorithm compute beta[t][tag] defined as:
-    beta[t][tag] = P{x_t+1, x_t+2, ..., x_T | Z_t = tag, pi, A, B}
-    recursively
-    given the batch b of observations x = [x1, ..., xB]
-    and model parameters pi, A and B
-
-    :param pi: initial probabilities
-    :param A: transition probabilities
-    :param B: emission probabilities
-    :param x (np.ndarray): batch of training data (numericized sentences)
-    :return: beta[b][t][tag] for all b=0..batch_size-1, t=0..T-1 and for each tag in tags
-    '''
-    batch_size, T = x.shape
-    K = len(pi)
-
-    beta = np.ones((batch_size, T, K))
-    for t in reversed(range(T-1)):
-        beta[:, t, :] = (A @ (B[:, x[:, t + 1]] * beta[:, t + 1, :].T)).T
-    return beta
-
-
-def Viterbi(pi, A, B, x):
-    '''
-    Viterbi algorithm predicts "the best" states z_b,0*, z_b,1*, ..., z_b,T-1*
-    for evry observation in batch of observations x,
-    given the model parameters A, B and pi.
-
-    The best states z_0*, z_1*, ..., z_T-1*
-    maximize the complete log likelihood:
-    z_b,0*, ..., z_b,T-1* = argmax_{z_0, ..., z_T-1} P{X=x_b, z_0, ..., z_T-1 | pi, A, B}
-
-    :param pi: initial probabilities
-    :param A: transition probabilities
-    :param B: emission probabilities
-    :param x: batch of observations
-
-    :return: the best paths
-    '''
-    batch_size, T = x.shape
-    K = len(pi)
-
-    # delta: best score up to time t in state i
-    delta = np.zeros((batch_size, T, K))
-    # psi: backpointers
-    psi = np.zeros((batch_size, T, K), dtype=int)
-
-    delta[:, 0, :] = pi * B[:, x[:, 0]].T  # shape (B, N)
-    psi[:, 0, :] = 0
-
-    for t in range(1, T):
-        # Expand delta[:, t-1, :] to (B, N, 1)
-        prev = delta[:, t - 1, :][:, :, None]  # shape (B, N, 1)
-
-        # Transition: prev * A
-        scores = prev * A[None, :, :]  # shape (B, N, N)
-
-        # Max over previous states
-        psi[:, t, :] = np.argmax(scores, axis=1)  # best prev state
-        delta[:, t, :] = np.max(scores, axis=1) * B[:, x[:, t]].T
-
-    # Best final states
-    best_states = np.zeros((batch_size, T), dtype=int)
-    for b in range(batch_size):
-        best_states[b, T - 1] = np.argmax(delta[b, T - 1, :])
-
-    # Backtrack
-    for b in range(batch_size):
-        for t in reversed(range(T - 2)):
-            next_state = best_states[b, t + 1]
-            best_states[b, t] = psi[b, t + 1, next_state]
-
-    return best_states
-
-
-def gamma(alpha, beta):
-    '''
-    Algorithm returns (batch_size, T, K) tensor defined as:
-    gamma[b][t][k] = E[Z_b,t,k = 1 | pi, A, B]
-    '''
-    gamma = alpha * beta  # (M, T, N)
-    gamma /= gamma.sum(axis=2, keepdims=True)  # normalize over hidden states
-    return gamma
-
-
-def xi(A, B, x, alpha, beta):
-    '''
-    Algorithm calculates
-    xi[b, t, i, j] = E[Z_b,t,i = 1, Z_b,t+1,j = 1| pi, A, B]
-    '''
-    batch_size, T = x.shape
-    K = alpha.shape[2]
-
-    xi = np.zeros((batch_size, T - 1, K, K))
-
-    for t in range(T - 1):
-        # emission probs for next obs, shape (M, N)
-        B_next = B[:, x[:, t + 1]].T  # (M, N)
-
-        # combine beta with emissions
-        temp = beta[:, t + 1, :] * B_next  # (M, N)
-
-        # alpha_t @ A gives (M, N, N) after broadcasting
-        xi[:, t, :, :] = alpha[:, t, :, None] * A[None, :, :] * temp[:, None, :]
-
-        # normalize per sequence
-        xi[:, t, :, :] /= xi[:, t, :, :].sum(axis=(1, 2), keepdims=True)
-
-        return xi
-
-
-def m_step(xi, gamma, x, vocab_size):
-    '''
-    Assumprton: Individual observations are independent of each other.
-    '''
-    batch_size, T, K = gamma.shape
-
-    pi_cap = np.mean([gamma[b][0] for b in range(batch_size)], axis=0)  # shape (K,)
-
-    xi_sum = np.sum([xi[b].sum(axis=0) for b in range(batch_size)], axis=0)  # (K, K)
-    gamma_sum = np.sum([gamma[b][:-1].sum(axis=0) for b in range(batch_size)], axis=0)  # (K,)
-    A_cap = xi_sum / gamma_sum[:, None]  # normalize row-wise, shape (K, K)
-
-    B_cap = np.zeros((K, vocab_size))
-    for v in range(vocab_size):
-        # Mask where observation equals symbol v
-        mask = (x == v)  # shape (batch_size, T), True where obs = v
-
-        # Numerator: sum gamma over those times
-        numer = 0
-        denom = 0
-        for b in range(batch_size):
-            numer += gamma[b][:T][mask[b, :T]].reshape(-1, K).sum(axis=0)
-            denom += gamma[b][:T].sum(axis=0)
-        B_cap[:, v] = numer / denom
-
-    return pi_cap, A_cap, B_cap
-
-
-def EM(pi_init, A_init, B_init, x):
-    pi_curr, A_curr, B_curr = pi_init, A_init, B_init
-    for iter in range(50):
-        # E step
-        alpha_curr = forward(pi_curr, A_curr, B_curr, x)
-        beta_curr = backward(pi_curr, A_curr, B_curr, x)
-        gamma_curr = gamma(alpha_curr, beta_curr)
-        xi_curr = xi(A_curr, B_curr, x, alpha_curr, beta_curr)
-
-        # M step
-        pi_curr, A_curr, B_curr = m_step(xi_curr, gamma_curr, x, vocab_size)
-    return pi_curr, A_curr, B_curr
-
-if __name__=='__main__':
-    '''
-    Recources:
-    1. Hidden Markov Models
-    https://web.stanford.edu/~jurafsky/slp3/A.pdf
-    - Elements of HMMs
-    - Forward-backward algorithm (for single observation)
-    - Baum-Welch algorithm (for single observation)
-    
-    2. Training Hidden Markov Models with Multiple Observations – A Combinatorial Method
-    https://scispace.com/pdf/training-hidden-markov-models-with-multiple-observations-a-46jcjwd03b.pdf
-    - Baum-Welch algorithm for multiple observation
-    '''
-    tags_vocab = Tags(training_tags)
-    vocab = Vocabulary(training_sentences)
-    training_x, training_z = preprocess_data(training_sentences, training_tags, vocab, tags_vocab)
-
-    batch_size, T = training_x.shape
-    K = len(tags_vocab)
-    vocab_size = len(vocab)
-
-    seed = 2
-    rng = np.random.default_rng(seed)
-    pi_init = rng.random(K)
-    pi_init /= pi_init.sum()
-    A_init = rng.random((K, K))
-    A_init /= A_init.sum(axis=1, keepdims=True)
-    B_init = rng.random((K, vocab_size))
-    B_init /= B_init.sum(axis=1, keepdims=True)
-
-    pi_cap, A_cap, B_cap = EM(pi_init, A_init, B_init, training_x)
-    best_states = Viterbi(pi_cap, A_cap, B_cap, training_x)
-
-    '''
-    1. conf dodaj A_init, B_init...
-    2. uradi jedan EM algoritam i analiziraj rezutate
-    3. napisi komentare
-    4. Objavi na Git
-    '''
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    bw_model = BaumWelch(observations=observations,
+                         pad_idx=0,
+                         init_log_parameters=init_log_parameters)
