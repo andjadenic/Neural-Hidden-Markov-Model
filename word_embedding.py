@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 from preprocessing import *
 
@@ -16,7 +15,7 @@ class CNN_word_embedding(nn.Module):
                                      out_channels=D,  # number of filters
                                      kernel_size=width,  # width of each filter
                                      bias=True)
-        self.maxpool = nn.MaxPool1d(kernel_size=L_token - width + 1)
+        self.maxpool = nn.MaxPool1d(kernel_size = vocab.L_token - width + 1)
     def forward(self, preprocessed_sentences):
         '''
         1. Tokend in preprocessed sentences are represented as OHE vectors
@@ -45,8 +44,7 @@ class CNN_word_embedding(nn.Module):
 
 
 # Data
-sentences = ['Today is Monday',
-             'I am not amazed']
+sentences = training_sentences
 
 # Build vocabulary
 vocab = Vocabulary(sentences)
@@ -54,8 +52,6 @@ vocab = Vocabulary(sentences)
 # Preprocessing data
 preprocessed_sentences = preprocess_sentences(sentences, vocab)  # (Nb, L_sentence, L_token)
 
-# Forward pass through
+# Forward pass
 word_embedding = CNN_word_embedding(vocab)
 embedded_sentences = word_embedding(preprocessed_sentences)  # (Nb, L_sen, D)
-print(embedded_sentences.shape)
-

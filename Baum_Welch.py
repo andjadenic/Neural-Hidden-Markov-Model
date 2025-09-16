@@ -1,17 +1,20 @@
+from typing_extensions import Self
+
 import torch
 import torch.nn as nn
+from data import *
+from preprocessing import *
 
 
-def normalize(x, dim):
-    norm = x.sum(dim=dim, keepdim=True)
-    norm[norm == 0] = 1
-    x.div_(norm)
-    return norm
+class NHMM(nn.Module):
+    def __init__(self, observations, D, init_log_parameters):
+        '''
 
-
-class BaumWelch(nn.Module):
-    def __init__(self, observations, pad_idx, init_log_parameters):
-        super(BaumWelch, self).__init__()
+        :param observations:
+        :param D:  Embedded tag vectors are from R^D
+        :param init_log_parameters:
+        '''
+        super(NHMM, self).__init__()
 
         self.init_log_pi, self.init_log_A, self.init_log_B = init_log_parameters
         self.log_pi = self.init_log_pi
@@ -23,7 +26,7 @@ class BaumWelch(nn.Module):
         self.tokens = set(observations.flatten().tolist())
         self.V = len(self.tokens)
 
-        self.pad_id = pad_idx
+        self.pad_id = 0
 
         self.K = self.init_log_pi.shape[0]  # number of all possible hidden states
         self.Nb, self.T = self.observations.shape  # batch size, max sequence length
@@ -34,6 +37,14 @@ class BaumWelch(nn.Module):
         self.log_beta = torch.zeros(Nb, T, K)
         self.log_gamma = torch.zeros(Nb, T, K)
         self.log_xi = torch.zeros(Nb, T, K, K)
+
+        # Tag embedding
+        self.D = D
+        self.tag_embedding = nn.Embedding(self.V, self.D,  padding_idx=0)
+        self.tag_relu = nn.ReLU()
+
+        # Word embedding
+
 
 
     def e_step(self):
@@ -51,11 +62,11 @@ class BaumWelch(nn.Module):
         # Calculating alpha
         log_alpha = torch.zeros(Nb, T, K)
         # Initialization
-        log_alpha[:, 0, :] = log_pi + log_B[:, observations[:, 0]].T
+        log_alpha[:, 0, :] = log_pi + log_B[:, self.observations[:, 0]].T
         # Induction
         for t in range(1, T):
             p = log_alpha[:, t - 1, :].unsqueeze(1) + log_A.T.unsqueeze(0)
-            log_alpha[:, t, :] = log_B[:, observations[:, t]].T + torch.logsumexp(p, dim=2)
+            log_alpha[:, t, :] = log_B[:, self.observations[:, t]].T + torch.logsumexp(p, dim=2)
         self.log_alpha = log_alpha
 
         # Calculating beta
@@ -63,7 +74,7 @@ class BaumWelch(nn.Module):
         log_beta = torch.zeros((Nb, T, K))
         # Recursion
         for t in reversed(range(T - 1)):
-            p = log_A.unsqueeze(0) + log_B[:, observations[:, t + 1]].T.unsqueeze(1) + log_beta[:, t + 1, :].unsqueeze(1)
+            p = log_A.unsqueeze(0) + log_B[:, self.observations[:, t + 1]].T.unsqueeze(1) + log_beta[:, t + 1, :].unsqueeze(1)
             log_beta[:, t, :] = torch.logsumexp(p, dim=2)
         self.log_beta = log_beta
 
@@ -78,7 +89,7 @@ class BaumWelch(nn.Module):
             p = (
                     log_alpha[:, t, :].unsqueeze(2)
                     + log_A.unsqueeze(0)
-                    + log_B[:, observations[:, t + 1]].T.unsqueeze(1)
+                    + log_B[:, self.observations[:, t + 1]].T.unsqueeze(1)
                     + log_beta[:, t + 1, :].unsqueeze(1)
             )  # (Nb, K, K)
             log_xi[:, t, :, :] = p - torch.logsumexp(p.view(Nb, -1), dim=1)[:, None, None]
@@ -114,6 +125,9 @@ class BaumWelch(nn.Module):
         obs_mask = torch.zeros((Nb, T, V))
         obs_mask.scatter_(2, self.observations.unsqueeze(-1), 1.0)
 
+        # Replace zeros with -inf in log-space
+        log_obs_mask = torch.where(obs_mask > 0, torch.zeros_like(obs_mask), torch.full_like(obs_mask, float('-inf')))
+
         # Remove pad_idx influence
         obs_mask[:, :, self.pad_id] = 0
 
@@ -145,6 +159,20 @@ class BaumWelch(nn.Module):
         self.log_parameters = (self.log_pi, self.log_A, self.log_B)
 
 
+    def train(self, max_iters=1):
+        """
+        Run Baum-Welch until convergence.
+        Convergence = when log_pi, log_A, log_B stop changing
+        more than eps in max norm.
+        """
+        for iteration in range(max_iters):
+            # E-step
+            self.e_step()
+
+            # M-step
+            self.m_step()
+
+
 
 if __name__ == "__main__":
     '''
@@ -164,23 +192,43 @@ if __name__ == "__main__":
         '''
 
     # Example
-    Nb = 2  # batch size
-    K = 3  # number of all possible hidden states
-    T = 4  # max number of time steps
-    V = 5  # vocabulary size
+    pad_id = 0
 
-    init_log_pi = torch.tensor([-10, -20, -300], dtype=torch.float)
-    init_log_A = torch.tensor([[-10, -10, -10],
-                                    [-200, -100, -155.5],
-                                    [-230, -10000, -55]], dtype=torch.float)
-    init_log_B = torch.tensor([[-10, -10, -10, -10, -10, ],
-                                    [-210, -310, -410, -510, -610],
-                                    [-210, -210, -210, -110, -110]], dtype=torch.float)
+    tags_vocab = Tags(training_tags)
+    vocab = Vocabulary(training_sentences)
+
+    training_x, training_z = preprocess_data(training_sentences, training_tags, vocab, tags_vocab)
+
+    Nb, T = training_x.shape  # batch size, max number of time steps
+    V = len(vocab)  # vocabulary size
+    K = len(set(training_x.flatten().tolist()))  # number of all possible hidden states including PAD
+
+    # Initialize model parameters (random)
+    init_pi = torch.rand(K)  # random positive values
+    init_pi /= init_pi.sum()  # normalize to sum=1
+    init_log_pi = init_pi.log()  # log-probs
+
+    init_A = torch.rand(K, K)
+    init_A /= init_A.sum(dim=1, keepdim=True)
+    init_log_A = init_A.log()
+
+    init_B = torch.rand(K, V)
+    if pad_id is not None:
+        init_B[:, pad_id] = 0.0  # disallow PAD emissions
+    init_B /= init_B.sum(dim=1, keepdim=True)
+    init_log_B = init_B.log()
+    if pad_id is not None:
+        init_log_B[:, pad_id] = float("-inf")
+
     init_log_parameters = (init_log_pi, init_log_A, init_log_B)
+    print(f'{init_pi=}', '\n')
+    print(f'{init_A=}', '\n')
+    print(f'{init_B=}', '\n')
 
-    observations = torch.tensor([[2, 2, 0, 0],
-                                      [3, 2, 1, 1]], dtype=torch.long)
-
-    bw_model = BaumWelch(observations=observations,
-                         pad_idx=0,
+    bw_model = BaumWelch(observations=training_z,
+                         pad_idx=pad_id,
                          init_log_parameters=init_log_parameters)
+    bw_model.train()
+    print(f'{bw_model.log_pi=}', '\n')
+    print(f'{bw_model.log_A=}', '\n')
+    print(f'{bw_model.log_B=}', '\n')
