@@ -1,7 +1,7 @@
 from data import *
 import torch
 
-class Tags:
+class Tag_vocabulary:
     def __init__(self, annotations):
         self.tags = sorted(set(tag for sublist in annotations for tag in sublist))
 
@@ -10,14 +10,15 @@ class Tags:
 
         self.tag2id['PAD'] = 0
         self.id2tag[0] = 'PAD'
+        self.tags.append('PAD')
 
         self.L = max([len(s) for s in annotations])
 
     def __len__(self):
-        return len(self.tags) + 1
+        return len(self.tags)
 
 
-class Vocabulary:
+class Char_vocabulary:
     def __init__(self, sentences):
         tokenized_sentences = [sentence.split() for sentence in sentences]  # token is one word
         chars = set([char for tok_sentence in tokenized_sentences for token in tok_sentence for char in token])
@@ -37,11 +38,30 @@ class Vocabulary:
         return len(self.char2id)
 
 
-def preprocess_sentences(sentences, vocab):
+class Word_vocabulary:
+    def __init__(self, sentences):
+        tokenized_sentences = [sentence.split() for sentence in sentences]  # token is one word
+        self.words = sorted(set([word for sentence in tokenized_sentences for word in sentence]))
+
+        self.word2id = {word:id for id, word in enumerate(self.words, start=1)}
+        self.word2id['PAD'] = 0
+        self.id2word = {id:word for id, word in enumerate(self.words, start=1)}
+        self.id2word[0] = 'PAD'
+
+        self.words.append('PAD')
+
+        self.L_sentence = max([len(sentence) for sentence in tokenized_sentences])
+
+
+    def __len__(self):
+        return len(self.word2id)
+
+
+def char_preprocess_sentences(sentences, vocab):
     '''
     :param sentences: batch of sentences given as list of list of strings
 
-    :return: numerized and padded sentences
+    :return: numerized and padded sentences char by char
     '''
     tokenized_sentences = [sentence.split() for sentence in sentences]
 
@@ -69,13 +89,19 @@ def preprocess_tags(raw_tags, tags_vocab):
 
 if __name__ == "__main__":
     # Build token (word) vocabulary
-    vocab = Vocabulary(training_sentences)
+    word_vocab = Word_vocabulary(training_sentences)
+    V = len(word_vocab)
+
+    # Build char vocabulary
+    char_vocab = Char_vocabulary(training_sentences)
+    ch_V = len(char_vocab)
 
     # Preprocess sentences
-    preprocessed_sentences = preprocess_sentences(training_sentences, vocab)  # (Nb, L_sentence, L_token)
+    char_preprocessed_sentences = char_preprocess_sentences(training_sentences, char_vocab)  # (Nb, L_sentence, L_token)
 
     # Build tag vocabulary
-    tags_vocab = Tags(training_tags)
+    tags_vocab = Tag_vocabulary(training_tags)
+    K = len(tags_vocab)
 
     # Preprocess tags
     preprocessed_annotations = preprocess_tags(training_tags, tags_vocab)

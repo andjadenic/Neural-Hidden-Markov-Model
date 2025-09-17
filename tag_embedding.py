@@ -2,9 +2,9 @@ from data import *
 from preprocessing import *
 import torch.nn as nn
 
-class basic_tag_embedding(nn.Module):
+class Basic_tag_embedding(nn.Module):
     def __init__(self, tags_vocab, D):
-        super(basic_tag_embedding, self).__init__()
+        super(Basic_tag_embedding, self).__init__()
 
         self.D = D
         self.tag_vocab = tags_vocab
@@ -13,6 +13,11 @@ class basic_tag_embedding(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, preprocessed_tags):
+        '''
+        processed_tags: (Nb, L_sentence) or (L_sentence, ) tensor
+
+        returns: (Nb, L_sentence, D) or (L_sentence, D) tensor
+        '''
         output = self.embedding(preprocessed_tags)
         output = self.relu(output)
         return output
@@ -20,12 +25,18 @@ class basic_tag_embedding(nn.Module):
 
 if __name__ == "__main__":
     # Build tag vocabulary
-    tags_vocab = Tags(training_tags)
-    print(tags_vocab.tags)
-    print(len(tags_vocab))
+    tag_vocab = Tag_vocabulary(training_tags)
+    K = len(tag_vocab)
+    tags_list = torch.arange(K, dtype=torch.int)
 
     # Preprocess tags
-    preprocessed_annotations = preprocess_tags(training_tags, tags_vocab)
+    preprocessed_annotations = preprocess_tags(training_tags, tag_vocab)
 
-    tag_embedding = basic_tag_embedding(tags_vocab, D=6)
-    lookup_table = tag_embedding(preprocessed_annotations)
+    # Build a tag embedding model
+    tag_embedding = Basic_tag_embedding(tag_vocab, D=6)
+
+    # Make embedded tags lookup table
+    # tags_lookup_table[k, :] is embedded tag k
+    K = len(tag_vocab)
+    tags_list = torch.arange(K, dtype=torch.int)
+    tags_lookup_table = tag_embedding(tags_list)  # (K, D) tensor

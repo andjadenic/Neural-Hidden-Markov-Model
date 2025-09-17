@@ -3,19 +3,19 @@ from preprocessing import *
 
 
 class CNN_word_embedding(nn.Module):
-    def __init__(self, vocab, d=10, D=6, width=2):
+    def __init__(self, char_vocab, d=10, D=6, width=2):
         super(CNN_word_embedding, self).__init__()
 
         self.d = d
         self.D = D
         self.width = width
 
-        self.embedding = nn.Embedding(len(vocab), d)
+        self.embedding = nn.Embedding(len(char_vocab), d)
         self.convolution = nn.Conv1d(in_channels=d,
                                      out_channels=D,  # number of filters
                                      kernel_size=width,  # width of each filter
                                      bias=True)
-        self.maxpool = nn.MaxPool1d(kernel_size = vocab.L_token - width + 1)
+        self.maxpool = nn.MaxPool1d(kernel_size = char_vocab.L_token - width + 1)
     def forward(self, preprocessed_sentences):
         '''
         1. Tokend in preprocessed sentences are represented as OHE vectors
@@ -47,11 +47,12 @@ class CNN_word_embedding(nn.Module):
 sentences = training_sentences
 
 # Build vocabulary
-vocab = Vocabulary(sentences)
+char_vocab = Char_vocabulary(sentences)
 
 # Preprocessing data
-preprocessed_sentences = preprocess_sentences(sentences, vocab)  # (Nb, L_sentence, L_token)
+preprocessed_sentences = char_preprocess_sentences(sentences, char_vocab)  # (Nb, L_sentence, L_token)
 
 # Forward pass
-word_embedding = CNN_word_embedding(vocab)
+word_embedding = CNN_word_embedding(char_vocab)
 embedded_sentences = word_embedding(preprocessed_sentences)  # (Nb, L_sen, D)
+print(embedded_sentences.shape)
