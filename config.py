@@ -8,3 +8,6 @@ width = 2
 # LSTM
 num_layers = 3
 dropout = 0
+
+# Training
+Nb = 2  # batch size

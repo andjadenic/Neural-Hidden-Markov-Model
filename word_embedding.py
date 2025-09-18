@@ -27,8 +27,10 @@ class CNN_word_embedding(nn.Module):
         slide through embedded data + Max pool
         1D convolution + Max pool -> (Nb, L_sentence, D)
 
-        :param preprocessed_sentences: (Nb, L_sentence, L_token) tensor
-        :return: (Nb, L_sentence, D) tensor
+        :param preprocessed_sentences: (Nb, L_sentence, L_token) tensor,
+            batch of OHE sentences char by char
+        :return: (Nb, L_sentence, D) tensor,
+            batch of embedded sentences word by word
         '''
         Nb, L_sentence, L_token = preprocessed_sentences.shape
 
@@ -42,17 +44,16 @@ class CNN_word_embedding(nn.Module):
 
         return output
 
+if __name__ == '__main__':
+    # Data
+    sentences = training_sentences
 
-# Data
-sentences = training_sentences
+    # Build vocabulary
+    char_vocab = Char_vocabulary(sentences)
 
-# Build vocabulary
-char_vocab = Char_vocabulary(sentences)
+    # Preprocessing data
+    preprocessed_sentences = char_preprocess_sentences(sentences, char_vocab)  # (Nb, L_sentence, L_token)
 
-# Preprocessing data
-preprocessed_sentences = char_preprocess_sentences(sentences, char_vocab)  # (Nb, L_sentence, L_token)
-
-# Forward pass
-word_embedding = CNN_word_embedding(char_vocab)
-embedded_sentences = word_embedding(preprocessed_sentences)  # (Nb, L_sen, D)
-print(embedded_sentences.shape)
+    # Forward pass
+    word_embedding = CNN_word_embedding(char_vocab)
+    embedded_sentences = word_embedding(preprocessed_sentences)  # (Nb, L_sen, D)

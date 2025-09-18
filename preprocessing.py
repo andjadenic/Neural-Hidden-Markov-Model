@@ -1,5 +1,7 @@
 from data import *
 import torch
+import torch.nn as nn
+from torch.nn.utils.rnn import pad_sequence
 
 class Tag_vocabulary:
     def __init__(self, annotations):
@@ -57,51 +59,58 @@ class Word_vocabulary:
         return len(self.word2id)
 
 
-def char_preprocess_sentences(sentences, vocab):
+def char_preprocess_sentences(xs):
     '''
-    :param sentences: batch of sentences given as list of list of strings
-
-    :return: numerized and padded sentences char by char
+    xs: list of preprocesed sentences on char level.
+        each sentence is (L_sentence, L_token) tensor
     '''
-    tokenized_sentences = [sentence.split() for sentence in sentences]
-
-    Nb = len(sentences)
-    L_sentence = max([len(sentence) for sentence in tokenized_sentences])
-    L_token = max([len(token) for tokenized_sentence in tokenized_sentences for token in tokenized_sentence])
+    Nb = len(xs)
+    L_sentence = max([x.shape[0] for x in xs])
+    L_token = max([x.shape[1] for x in xs])
 
     preprocessed_sentences = torch.zeros((Nb, L_sentence, L_token), dtype=torch.int)
-    for b, sentence in enumerate(tokenized_sentences):
-        for i_s, token in enumerate(sentence):
-            for i_c, char in enumerate(token):
-                preprocessed_sentences[b, i_s, i_c] = vocab.char2id[char]
+    for b, tensor_sentence in enumerate(xs):
+        l1, l2 = tensor_sentence.shape
+        preprocessed_sentences[b, :l1, :l2] = tensor_sentence
     return preprocessed_sentences
 
 
-def preprocess_tags(raw_tags, tags_vocab):
-    Nb = len(raw_tags)
+def preprocess_sentence(sentence, char_vocab):
+    '''
+    :param sentence: (str) a single sentence
 
-    preprocessed_annotations = torch.zeros((Nb, tags_vocab.L), dtype=int)
-    for b, tags in enumerate(raw_tags):
-        for i, tag in enumerate(tags):
-            preprocessed_annotations[b, i] = tags_vocab.tag2id[tag]
-    return preprocessed_annotations
+    :return: (torch.tensor) numericize sentence char by char
+    '''
+    tokenize_sentence = sentence.split()
+    preprocessed_sentence = []
+    for token in tokenize_sentence:
+        preprocessed_tag = []
+        for char in token:
+            preprocessed_tag.append(char_vocab.char2id[char])
+        preprocessed_tag = torch.tensor(preprocessed_tag)
+        preprocessed_sentence.append(preprocessed_tag)
+    preprocessed_sentence = nn.utils.rnn.pad_sequence(preprocessed_sentence,
+                                                      batch_first=True,
+                                                      padding_value=0)
+    return preprocessed_sentence
 
 
-if __name__ == "__main__":
-    # Build token (word) vocabulary
-    word_vocab = Word_vocabulary(training_sentences)
-    V = len(word_vocab)
+def preprocess_target(raw_tags, tag_vocab):
+    '''
+    Preprocess
+    raw_tags: list of strings
+    '''
+    output = []
+    for tag in raw_tags:
+        output.append(tag_vocab.tag2id[tag])
+    return torch.tensor(output, dtype=torch.int)
 
-    # Build char vocabulary
-    char_vocab = Char_vocabulary(training_sentences)
-    ch_V = len(char_vocab)
 
-    # Preprocess sentences
-    char_preprocessed_sentences = char_preprocess_sentences(training_sentences, char_vocab)  # (Nb, L_sentence, L_token)
-
-    # Build tag vocabulary
-    tags_vocab = Tag_vocabulary(training_tags)
-    K = len(tags_vocab)
-
-    # Preprocess tags
-    preprocessed_annotations = preprocess_tags(training_tags, tags_vocab)
+def collate_fn(samples_list):
+    '''
+    samples_list is a list of tuples (x, y)
+    '''
+    xs, ys = zip(*samples_list)
+    xs_padded = char_preprocess_sentences(xs)
+    ys_padded = pad_sequence(ys, batch_first=True, padding_value=0)
+    return (xs_padded, ys_padded)

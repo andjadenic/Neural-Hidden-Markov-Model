@@ -6,6 +6,26 @@ from preprocessing import *
 from data import *
 from tag_embedding import *
 from word_embedding import *
+from torch.utils.data import Dataset, DataLoader
+
+
+class Small_WSJ_Dataset(Dataset):
+    def __init__(self, raw_x, raw_y, char_vocab, tag_vocab):
+        """
+        raw_x: list of sentences represented as strings
+        raw_y: list of lists of tags represented as strings
+        """
+        self.raw_x = raw_x  # Raw sentences
+        self.raw_y = raw_y  # Raw tags
+
+        self.x = [preprocess_sentence(sentence, char_vocab) for sentence in self.raw_x]  # list of tensors
+        self.y = [preprocess_target(raw_target, tag_vocab) for raw_target in self.raw_y]
+
+    def __len__(self):
+        return len(self.raw_x)
+
+    def __getitem__(self, id):
+        return (self.x[id], self.y[id])
 
 
 class NHMM(nn.Module):
@@ -57,20 +77,47 @@ class NHMM(nn.Module):
 
 
 if __name__ == "__main__":
-    # Build token (word) vocabulary
+
+    # Build char vocabulary
+    char_vocab = Char_vocabulary(small_training_sentences)
+    ch_V = len(char_vocab)
+
+    # Build tag vocabulary
+    tag_vocab = Tag_vocabulary(small_training_tags)
+    K = len(tag_vocab)
+
+    # Wrap data in a Dataset and DataLoader
+    training_dataset = Small_WSJ_Dataset(raw_x=small_training_sentences,
+                                         raw_y=small_training_tags,
+                                         char_vocab=char_vocab,
+                                         tag_vocab=tag_vocab)
+    training_dataloader = DataLoader(training_dataset,
+                                     batch_size=Nb,
+                                     shuffle=False,
+                                     collate_fn=collate_fn)
+
+    # Initialize model, loss and optimizer
+    # Build a Neural Hidden Markov Model
+    '''nhmm_model = NHMM(D, V, K,
+                      num_layers=num_layers,
+                      dropout=dropout)'''
+
+    # Try forward pass for single input
+
+    # Train the model
+
+    # Save model parameters
+
+    # Load model parameters
+
+    # Test predictions with loaded model
+    
+    '''# Build token (word) vocabulary
     word_vocab = Word_vocabulary(training_sentences)
     V = len(word_vocab)
 
-    # Build char vocabulary
-    char_vocab = Char_vocabulary(training_sentences)
-    ch_V = len(char_vocab)
-
     # Preprocess sentences
     char_preprocessed_sentences = char_preprocess_sentences(training_sentences, char_vocab)  # (Nb, L_sentence, L_token)
-
-    # Build tag vocabulary
-    tag_vocab = Tag_vocabulary(training_tags)
-    K = len(tag_vocab)
 
     # Build a tag embedding model
     tag_embedding = Basic_tag_embedding(tag_vocab, D)
@@ -85,12 +132,6 @@ if __name__ == "__main__":
 
     # Build a word embedding (CNN)
     word_embedding = CNN_word_embedding(char_vocab, d, D, width)
-    # HERE
 
-    # Build a Neural Hidden Markov Model
-    nhmm_model = NHMM(D, V, K,
-                      num_layers=num_layers,
-                      dropout=dropout)
-
-    # How the fuck to train this network??
-    # Trainable parameters: ___
+    # to embed batch of preprocessed annotations just do word_embedding(prerocessed_annotations)
+    '''
