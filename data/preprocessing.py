@@ -1,4 +1,3 @@
-from data import *
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
@@ -63,6 +62,8 @@ def char_preprocess_sentences(xs):
     '''
     xs: list of preprocesed sentences on char level.
         each sentence is (L_sentence, L_token) tensor
+
+    return: padded tensor of xs
     '''
     Nb = len(xs)
     L_sentence = max([x.shape[0] for x in xs])

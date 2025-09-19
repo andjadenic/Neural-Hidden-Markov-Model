@@ -1,9 +1,4 @@
-from typing_extensions import Self
-
-import torch
-import torch.nn as nn
-from data import *
-from preprocessing import *
+from pythonProject1.data.preprocessing import *
 
 
 class NHMM(nn.Module):

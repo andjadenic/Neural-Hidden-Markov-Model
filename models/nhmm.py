@@ -1,11 +1,8 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from config import *
-from preprocessing import *
-from data import *
-from tag_embedding import *
-from word_embedding import *
+from pythonProject1.config import *
+from pythonProject1.models.word_embedding import *
+from pythonProject1.models.tag_embedding import *
+from pythonProject1.data.data import *
+from pythonProject1.data.preprocessing import *
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -19,7 +16,7 @@ class Small_WSJ_Dataset(Dataset):
         self.raw_y = raw_y  # Raw tags
 
         self.x = [preprocess_sentence(sentence, char_vocab) for sentence in self.raw_x]  # list of tensors
-        self.y = [preprocess_target(raw_target, tag_vocab) for raw_target in self.raw_y]
+        self.y = [preprocess_target(raw_target, tag_vocab) for raw_target in self.raw_y]  # list of words
 
     def __len__(self):
         return len(self.raw_x)
@@ -29,6 +26,9 @@ class Small_WSJ_Dataset(Dataset):
 
 
 class NHMM(nn.Module):
+    '''
+    full Neural HMM model wrapper that ties emissions and transitions together
+    '''
     def __init__(self, D, V, K, num_layers=1, dropout=0):
         super(NHMM, self).__init__()
 
@@ -77,7 +77,6 @@ class NHMM(nn.Module):
 
 
 if __name__ == "__main__":
-
     # Build char vocabulary
     char_vocab = Char_vocabulary(small_training_sentences)
     ch_V = len(char_vocab)
@@ -86,21 +85,49 @@ if __name__ == "__main__":
     tag_vocab = Tag_vocabulary(small_training_tags)
     K = len(tag_vocab)
 
+    # Build word vocabulary
+    word_vocab = Word_vocabulary(small_training_sentences)
+    word_V = len(word_vocab)
+
     # Wrap data in a Dataset and DataLoader
     training_dataset = Small_WSJ_Dataset(raw_x=small_training_sentences,
                                          raw_y=small_training_tags,
                                          char_vocab=char_vocab,
                                          tag_vocab=tag_vocab)
+
     training_dataloader = DataLoader(training_dataset,
                                      batch_size=Nb,
                                      shuffle=False,
                                      collate_fn=collate_fn)
 
+    # Initialize word embedding model and tag embedding model
+    word_embedding_model = CNN_word_embedding(char_vocab, d, D, width)
+    tag_embedding_model = Basic_tag_embedding(tag_vocab, D)
+
+    for b, (batch_x, batch_y) in enumerate(training_dataloader):
+        # batch_x : (Nb, L_sentence, L_token)
+        embedded_sentences = word_embedding_model(batch_x)  # (Nb, L_sentence, D)
+
+        # batch_y : (Nb, L_sentence)
+        embedded_tags = tag_embedding_model(batch_y)  # (Nb, L_sentence, D)
+
+    # Once we have word embedding model and tag embedding model,
+    # we can easily compute emission probabilities
+    # B[word_i | tag_k] is proportional to embedd(word_i) * embedd(tag_k)
+    # log_B[word_i | tag_k] is proportional to log_embedd(word_i) + log_embedd(tag_k)
+    '''print(word_vocab.id2word)
+    i = 8  # without PAD
+    word_i = word_vocab.id2word[i]
+    preprocessed_word_i = preprocess_sentence(word_i, char_vocab)
+    embedd_word_i = word_embedding_model(preprocessed_word_i.unsqueeze(0))
+    print(word_i)
+    print(preprocessed_word_i)
+    print(embedd_word_i)'''
+    #embedd(word_i) = preprocess_sentence('word_i') []
+
+
     # Initialize model, loss and optimizer
     # Build a Neural Hidden Markov Model
-    '''nhmm_model = NHMM(D, V, K,
-                      num_layers=num_layers,
-                      dropout=dropout)'''
 
     # Try forward pass for single input
 
@@ -111,27 +138,3 @@ if __name__ == "__main__":
     # Load model parameters
 
     # Test predictions with loaded model
-    
-    '''# Build token (word) vocabulary
-    word_vocab = Word_vocabulary(training_sentences)
-    V = len(word_vocab)
-
-    # Preprocess sentences
-    char_preprocessed_sentences = char_preprocess_sentences(training_sentences, char_vocab)  # (Nb, L_sentence, L_token)
-
-    # Build a tag embedding model
-    tag_embedding = Basic_tag_embedding(tag_vocab, D)
-
-    # Make embedded tags lookup table
-    # tags_lookup_table[k, :] is embedded tag k
-    tags_list = torch.arange(K, dtype=torch.int)
-    tags_lookup_table = tag_embedding(tags_list)  # (K, D) tensor
-
-    # Preprocess tags
-    preprocessed_annotations = preprocess_tags(training_tags, tag_vocab)  # (Nb, L_sentence)
-
-    # Build a word embedding (CNN)
-    word_embedding = CNN_word_embedding(char_vocab, d, D, width)
-
-    # to embed batch of preprocessed annotations just do word_embedding(prerocessed_annotations)
-    '''

@@ -1,6 +1,6 @@
 small_training_sentences = ['The big company rises',
                             'The company fell',
-                            'A company rises',
+                            'The company rises',
                             'The market is strong']
 small_training_tags = [['DT', 'ADJ', 'NN', 'VBZ'],
                        ['DT', 'NN', 'VBD'],
