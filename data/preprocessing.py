@@ -1,6 +1,5 @@
 import torch
-import torch.nn as nn
-from torch.nn.utils.rnn import pad_sequence
+
 
 class Tag_vocabulary:
     def __init__(self, annotations):
@@ -76,24 +75,15 @@ def char_preprocess_sentences(xs):
     return preprocessed_sentences
 
 
-def preprocess_sentence(sentence, char_vocab):
-    '''
-    :param sentence: (str) a single sentence
-
-    :return: (torch.tensor) numericize sentence char by char
-    '''
-    tokenize_sentence = sentence.split()
-    preprocessed_sentence = []
-    for token in tokenize_sentence:
-        preprocessed_tag = []
-        for char in token:
-            preprocessed_tag.append(char_vocab.char2id[char])
-        preprocessed_tag = torch.tensor(preprocessed_tag)
-        preprocessed_sentence.append(preprocessed_tag)
-    preprocessed_sentence = nn.utils.rnn.pad_sequence(preprocessed_sentence,
-                                                      batch_first=True,
-                                                      padding_value=0)
-    return preprocessed_sentence
+def char_matrix(word_vocab, char_vocab):
+    word_V = len(word_vocab)
+    out = torch.zeros((word_V, char_vocab.L_token),
+                      dtype=torch.int)
+    for word_id in range(1, word_V):
+        word = word_vocab.id2word[word_id]
+        for i, char in enumerate(word):
+            out[word_id, i] = char_vocab.char2id[char]
+    return out
 
 
 def preprocess_target(raw_tags, tag_vocab):
@@ -104,14 +94,19 @@ def preprocess_target(raw_tags, tag_vocab):
     output = []
     for tag in raw_tags:
         output.append(tag_vocab.tag2id[tag])
-    return torch.tensor(output, dtype=torch.int)
+    return torch.tensor(output, dtype=torch.long)
 
 
-def collate_fn(samples_list):
+def preprocess_sentence(sentence, word_vocab):
     '''
-    samples_list is a list of tuples (x, y)
+    :param sentence: (str) a single sentence
+
+    :return: (L, ) (torch.tensor) numericize sentence word by word
     '''
-    xs, ys = zip(*samples_list)
-    xs_padded = char_preprocess_sentences(xs)
-    ys_padded = pad_sequence(ys, batch_first=True, padding_value=0)
-    return (xs_padded, ys_padded)
+    tokenize_sentence = sentence.split()
+    preprocessed_sentence = []
+    for token in tokenize_sentence:
+        preprocessed_sentence.append(word_vocab.word2id[token])
+    return torch.tensor(preprocessed_sentence, dtype=torch.long)
+
+

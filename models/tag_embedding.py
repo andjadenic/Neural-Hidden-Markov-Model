@@ -2,13 +2,13 @@ from pythonProject1.data.preprocessing import *
 import torch.nn as nn
 
 class Basic_tag_embedding(nn.Module):
-    def __init__(self, tag_vocab, D):
+    def __init__(self, K, D):
         super(Basic_tag_embedding, self).__init__()
 
         self.D = D
-        self.tag_vocab = tag_vocab
+        self.K = K
 
-        self.embedding = nn.Embedding(len(tag_vocab), D)
+        self.embedding = nn.Embedding(K, D)
         self.relu = nn.ReLU()
 
     def forward(self, preprocessed_tags):

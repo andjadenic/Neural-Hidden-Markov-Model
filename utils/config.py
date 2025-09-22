@@ -11,3 +11,5 @@ dropout = 0
 
 # Training
 Nb = 2  # batch size
+lr = 1e-3  # learning rate
+N_epochs = 5000
