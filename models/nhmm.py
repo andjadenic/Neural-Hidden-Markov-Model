@@ -29,8 +29,9 @@ class NHMM(nn.Module):
         print('The Neural Hidden Markov Model was successfully created.')
 
 
-    def forward(self, batch_tags, embedded_tags, embedded_W):
+    def forward(self, batch_sentences, batch_tags, embedded_tags, embedded_W):
         '''
+        batch_sentences: (Nb, L_sentence)
         batch_tag : (Nb, L_sentence)
         embedded_tags : (Nb, L_sentence, D)
         embedded_W : (word_V, D)
@@ -47,9 +48,9 @@ class NHMM(nn.Module):
         #  (word_V, D) @ (D, Nb * L_sentence) = (word_V, Nb * L_sentence)
         emissions = emissions.T  # (Nb * L_sentence, word_V)
 
-
         # Transitions
-        h, _ = self.lstm(embedded_tags[:, :-1, :])  # (Nb, L_sentence - 1, D)
+        embedded_sentences = embedded_W[batch_sentences]  # (Nb, L_sentence, D)
+        h, _ = self.lstm(embedded_sentences[:, :-1, :])  # (Nb, L_sentence - 1, D)
         h = h.reshape(Nb * (L_sentence - 1), self.D)
 
         transitions = self.transition_fc(h)  # (Nb * (L_sentence - 1), K^2)

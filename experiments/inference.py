@@ -1,3 +1,5 @@
+import torch
+
 from pythonProject1.models.word_embedding import *
 from pythonProject1.models.tag_embedding import *
 from pythonProject1.models.nhmm import *
@@ -24,10 +26,10 @@ if __name__ == "__main__":
                                         word_vocab=word_vocab,
                                         tag_vocab=tag_vocab)
     
-    testing_dataloader = DataLoader(testing_dataset,
+    '''testing_dataloader = DataLoader(testing_dataset,
                                     batch_size=Nb,
                                     shuffle=False,
-                                    collate_fn=collate_fn)
+                                    collate_fn=collate_fn)'''
     
     # Load the trained models and set them for evaluation
     word_embedding_model = CNN_word_embedding(char_vocab, d, D, width)
@@ -58,20 +60,32 @@ if __name__ == "__main__":
     # Define trained emission matrix B
     B = embedded_T @ embedded_W.T
 
-    # Define trained transition matrix A
-    # Transitions
-    h, _ = nhmm_model.lstm(embedded_tags[:, :-1, :])  # (Nb, L_sentence - 1, D)
-    h = h.reshape(Nb * (L_sentence - 1), self.D)
+    # Define observation sequence
+    test_sentence, test_targets = testing_dataset[0]  # (L_sentence,), (L_sentence,)
+    L_sentence = test_sentence.shape[0]
+    test_embedded_sentence = embedded_W[test_sentence]  # (L_sentence, D)
 
-    transitions = self.transition_fc(h)  # (Nb * (L_sentence - 1), K^2)
-    transitions = transitions.reshape(Nb, L_sentence - 1, self.K, self.K)
+    # Define trained transition matrices A_t
+    h, _ = nhmm_model.lstm(test_embedded_sentence[:-1, :])  # (L_sentence - 1, D)
+    As = nhmm_model.transition_fc(h)  # (L_sentence - 1, K^2)
+    As = As.reshape(-1, K, K)
 
+    # Define initial probabilities pi
+    pi = torch.ones((K, ), dtype=torch.double) / K  # uniform distribution
+
+    # Decode observation sequence using Viterbi algorithm
+    # input: As, B, pi, test_sentence
+    # output: Likelihood and the best route
+    # v[t, k] = P{w0, w1, ..., w_t, t_0, ..., t_t-1, t_t=k}
+    # p[t, k] is back pointer to the state q_{t-1} that is the most probable
+    '''v = torch.ones((L_sentence, K), dtype=torch.double)
+    b = torch.ones((L_sentence, K), dtype=torch.int)
+
+    v[0, :] = pi * B[]
+    for t in range(1, L_sentence):
+        v[t, :] = 
+        b[t, :] = 
+    https://web.stanford.edu/~jurafsky/slp3/A.pdf#page=8.13    
     '''
-    Now that I have trained model
-    what do I want?
-    
-    Given the sentence, I want model to predict its tags
-    
-    For that I need Viterbi algorithm
-    and A and B matrices
-    '''
+
+

@@ -25,7 +25,7 @@ class Small_WSJ_Dataset(Dataset):
         return len(self.raw_x)
 
     def __getitem__(self, id):
-        return (self.x[id], self.y[id])
+        return (self.x[id], self.y[id])  # (L_sentence, ), (L_sentence, )
 
 
 if __name__ == "__main__":
@@ -89,7 +89,7 @@ if __name__ == "__main__":
             # batch_tag : (Nb, L_sentence)
             embedded_tags = tag_embedding_model(batch_tags)  # (Nb, L_sentence, D)
 
-            transitions, emissions = nhmm_model(batch_tags, embedded_tags, embedded_W)
+            transitions, emissions = nhmm_model(batch_sentences, batch_tags, embedded_tags, embedded_W)
             # transitions: (Nb * (L_sentence - 1), K)
             # emissions: # (Nb * L_sentence, word_V)
 
