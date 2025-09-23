@@ -26,6 +26,8 @@ class NHMM(nn.Module):
                             dropout=dropout)
         self.transition_fc = nn.Linear(self.D, self.K ** 2)
 
+        print('The Neural Hidden Markov Model was successfully created.')
+
 
     def forward(self, batch_tags, embedded_tags, embedded_W):
         '''
@@ -53,10 +55,8 @@ class NHMM(nn.Module):
         transitions = self.transition_fc(h)  # (Nb * (L_sentence - 1), K^2)
         transitions = transitions.reshape(Nb, L_sentence - 1, self.K, self.K)
 
-        # Nb, L_sentence - 1, K, K = 2, 3, 4, 5
-
         # Expand batch_tags to match the shape for gather
-        batch_tags_expanded = batch_tags[:, :-1].unsqueeze(-1).unsqueeze(-1).expand(-1, -1, 1, K)  # (Nb, L_sentence - 1, 1, K)
+        batch_tags_expanded = batch_tags[:, :-1].unsqueeze(-1).unsqueeze(-1).expand(-1, -1, 1, self.K)  # (Nb, L_sentence - 1, 1, K)
 
         # Gather along the K dimension (dim=2)
         transitions = torch.gather(transitions, dim=2, index=batch_tags_expanded)

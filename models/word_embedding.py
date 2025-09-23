@@ -19,6 +19,8 @@ class CNN_word_embedding(nn.Module):
                                      bias=True)
         self.maxpool = nn.MaxPool1d(kernel_size=self.L_token - self.width + 1)
 
+        print('The word embedding was successfully created.')
+
     def forward(self, W):
         '''
         W: (word_V, L_token) tensor of numericized words (on char level) as rows

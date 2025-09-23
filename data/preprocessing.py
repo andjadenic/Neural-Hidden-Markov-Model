@@ -14,6 +14,8 @@ class Tag_vocabulary:
 
         self.L = max([len(s) for s in annotations])
 
+        print('The tag dictionary was successfully created.')
+
     def __len__(self):
         return len(self.tags)
 
@@ -33,6 +35,8 @@ class Char_vocabulary:
         self.L_sentence = max([len(sentence) for sentence in tokenized_sentences])
         self.L_token = max([len(token) for sentence in tokenized_sentences for token in sentence])
 
+        print('The char dictionary was successfully created.')
+
 
     def __len__(self):
         return len(self.char2id)
@@ -51,6 +55,8 @@ class Word_vocabulary:
         self.words.append('PAD')
 
         self.L_sentence = max([len(sentence) for sentence in tokenized_sentences])
+
+        print('The word dictionary was successfully created.')
 
 
     def __len__(self):
@@ -83,6 +89,15 @@ def char_matrix(word_vocab, char_vocab):
         word = word_vocab.id2word[word_id]
         for i, char in enumerate(word):
             out[word_id, i] = char_vocab.char2id[char]
+    return out
+
+
+def embedd_tag_matrix(tag_vocab, tag_embedding_model):
+    K = len(tag_vocab)
+    D = tag_embedding_model.D
+
+    tags_tensor = torch.arange(K, dtype=torch.int).reshape((K, 1))
+    out = tag_embedding_model(tags_tensor)
     return out
 
 

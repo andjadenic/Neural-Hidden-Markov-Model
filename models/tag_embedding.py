@@ -11,6 +11,8 @@ class Basic_tag_embedding(nn.Module):
         self.embedding = nn.Embedding(K, D)
         self.relu = nn.ReLU()
 
+        print('The tag embedding was successfully created.')
+
     def forward(self, preprocessed_tags):
         '''
         processed_tags: (Nb, L_sentence) or (L_sentence, ) tensor
