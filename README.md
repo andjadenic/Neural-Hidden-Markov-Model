@@ -6,6 +6,8 @@ Part-of-speech tagging is a fully supervised learning task because we have a cor
 * Input example: 'The big company rises'
 * Output example: 'DT', 'ADJ', 'NN', 'VBZ'
 
+This project uses the model architecture described in the paper [Tran, Ke, et al. "Unsupervised neural hidden Markov models." (2016)](https://arxiv.org/abs/1609.09007).
+
 # Dataset
 The dataset used for training the model consists of 80 small sentence-tag pairs that imitate the WSJ corpus.
 
