@@ -30,15 +30,15 @@ class Small_WSJ_Dataset(Dataset):
 
 if __name__ == "__main__":
     # Build char vocabulary
-    char_vocab = Char_vocabulary(small_training_sentences)
+    char_vocab = Char_vocabulary(training_sentences)
     char_V = len(char_vocab)
 
     # Build tag vocabulary
-    tag_vocab = Tag_vocabulary(small_training_tags)
+    tag_vocab = Tag_vocabulary(training_tags)
     K = len(tag_vocab)
 
     # Build word vocabulary
-    word_vocab = Word_vocabulary(small_training_sentences)
+    word_vocab = Word_vocabulary(training_sentences)
     word_V = len(word_vocab)
 
     # Make words lookup table
@@ -46,8 +46,8 @@ if __name__ == "__main__":
     # W has numericized words (on char level) as rows
 
     # Wrap data in a Dataset and DataLoader
-    training_dataset = Small_WSJ_Dataset(raw_x=small_training_sentences,
-                                         raw_y=small_training_tags,
+    training_dataset = Small_WSJ_Dataset(raw_x=training_sentences,
+                                         raw_y=training_tags,
                                          word_vocab=word_vocab,
                                          tag_vocab=tag_vocab)
 
@@ -76,12 +76,12 @@ if __name__ == "__main__":
         word_embedding_model.train()
         tag_embedding_model.train()
         nhmm_model.train()
-
+        print('Epoch : ', epoch)
         for b, (batch_sentences, batch_tags) in enumerate(training_dataloader):
             # batch_sentence : (Nb, L_sentence)
             # batch_tag : (Nb, L_sentence)
-            print('Batch: ', b)
-            L_sentence = batch_sentences.shape[1]
+            print('Batch : ', b)
+            Nb, L_sentence = batch_sentences.shape
 
             # embedded_W is a matrix that has embedded words 0, 1, ...word_V as  rows
             embedded_W = word_embedding_model(W)  # (word_V, D)
@@ -94,7 +94,7 @@ if __name__ == "__main__":
             # emissions: # (Nb * L_sentence, word_V)
 
             # Calculate loss in current batch
-            batch_loss = loss(transitions, batch_tags[:, 1:].reshape(Nb * (L_sentence - 1), )) + \
+            batch_loss = loss(transitions, batch_tags[:, 1:].reshape(Nb * (L_sentence - 1))) + \
                          loss(emissions, batch_sentences.reshape(Nb * L_sentence, ))
             print('Batch loss = ', batch_loss.item())
 
@@ -102,6 +102,7 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             batch_loss.backward()
             optimizer.step()
+        print('\n')
     print('Model training has been successfully completed.')
 
     # Save model parameters
