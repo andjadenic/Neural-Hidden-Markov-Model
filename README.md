@@ -38,7 +38,7 @@ $$P(word_v | tag_k) = \dfrac{e^{\text{embedded}(word_v) \cdot \text{embedded}(ta
 
 
 # Training
-The loss function is the sum of cross-entropy losses between model predictions of the next tag and the ground truth next tag, and the sum of cross-entropy losses between the model's prediction of the tag and the ground truth tag.
+The loss function is the sum of cross-entropy losses between model predictions of the next tag and the ground truth next tag, and the sum of cross-entropy losses between the model's prediction of the tag and the ground truth tag:
 
 $$L = - \sum_{n=1}^{N} \sum_{t=1}^{L-1} \text{tag}^{(n)}_{t+1} \cdot \log P(\text{tag}^{(n)}_t | \text{tag}^{(n)}_{t+1}) - \sum_{n=1}^{N} \sum_{t=1}^{L} \text{tag}^{(n)}_t \cdot \log P(\text{tag}^{(n)}_t | \text{word}^{(n)}_t)$$
 
@@ -46,9 +46,14 @@ In terms of transition and emission probability matrices A and B, the loss is eq
 
 $$L = - \sum_{n=1}^{N} \sum_{t=1}^{L-1} \text{tag}^{(n)}_{t+1} \cdot \log A(\text{tag}^{(n)}_t, \text{tag}^{(n)}_{t+1}) - \sum_{n=1}^{N} \sum_{t=1}^{L} \text{tag}^{(n)}_t \cdot \log B(\text{tag}^{(n)}_t, \text{word}^{(n)}_t)$$
 
-Training is done in batches of `Nb=4`, in `N_epoch=5000`  
+The gradient descent method with the Adam optimizer is used to find model parameters that minimize the loss function $L$. Training is done in batches of `Nb=4`, in `N_epoch=5000` epochs.
+
+* Training file: [experiments/training.py](https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/experiments/training.py)
+* Saved model parameters: [models/models.pth](https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/models/models.pth) 
 
 # Inference
+Once optimal model parameters are found, inference is done using the [Viterbi algorithm](https://web.stanford.edu/~jurafsky/slp3/A.pdf) that finds the most probable hidden states (tags) for given observations (sentence), defined in [experiments/inference.py](https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/experiments/inference.py).
 
 # Utils
+In [utils/config.py](https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/utils/config.py) are defined all model hyperparameters.
 
