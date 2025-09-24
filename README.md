@@ -9,7 +9,7 @@ Part-of-speech tagging is a fully supervised learning task because we have a cor
 # Dataset
 The dataset used for training the model consists of 80 small sentence-tag pairs that imitate the WSJ corpus.
 
-The dataset is listed in (data/data.py)[https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/data/data.py] file.
+The dataset is listed in [data/data.py](https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/data/data.py) file.
 
 # Data preprocessing
 The project utilizes three vocabulary classes: `char_vocab`, `word_vocab`, and `tag_vocab`, defined in (data/preprocessing.py)[https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/data/preprocessing.py], which are used to preprocess raw sentences and tags.
