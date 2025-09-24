@@ -24,7 +24,7 @@ Both words and tags are mapped into D-dimensional space. Those embeddings are la
 # Model architecture
 [Hidden Markov Model](https://web.stanford.edu/~jurafsky/slp3/A.pdf) is assumed to be the underlying model, commonly used for the POS tagging task.
 
-In the POS tagging task, hidden states are tags and observed states are words.
+In the POS tagging task, hidden states are tags, and observed states are words.
 Model parameters, transition and emission probability matrices A and B, are learned during training and used for inference.
 
 ## Transition architecture
@@ -32,9 +32,7 @@ Model parameters, transition and emission probability matrices A and B, are lear
 
 ## Emission architecture
 The emission probability of producing the word `v` given the tag`k` is computed as a normalized scalar product of the embedded word `v` and the embedded tag `k`:
-$
-P{word_v | tag_k} = \dfrac{e^{embedded(word_v) * embedded(tag_k)}}{\sum_j=1^k e^{embedded(word_j) * embedded(tag_k)}}
-$
+$$P{word_v | tag_k} = \dfrac{e^{embedded(word_v) * embedded(tag_k)}}{\sum_j=1^k e^{embedded(word_j) * embedded(tag_k)}}$$
 
 # Training
 
