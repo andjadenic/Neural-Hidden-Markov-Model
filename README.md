@@ -25,15 +25,15 @@ Both words and tags are mapped into D-dimensional space. Those embeddings are la
 [Hidden Markov Model](https://web.stanford.edu/~jurafsky/slp3/A.pdf) is assumed to be the underlying model, commonly used for the POS tagging task.
 
 In the POS tagging task, hidden states are tags, and observed states are words.
-Model parameters, transition and emission probability matrices A and B, defined in [models/nhmm](https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/models/nhmm.py) are learned during training and used for inference.
+Model parameters, transition and emission probability matrices A and B, defined in [models/nhmm.py](https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/models/nhmm.py) are learned during training and used for inference.
 
 ## Transition architecture
-
+The transition matrix $T^{(t)}$ at the time step $t$ is augmented with $h_t$, a compact form of all preceding words in the sentence. $h_t$ is Long-Short Term Memory's (LSTM's) output at the time step $t$. $h_t$ is forwarded into a fully connected linear layer and normalized to get $T^{(t)}$.
 
 ## Emission architecture
 The emission probability of producing the word `v` given the tag`k` is computed as a normalized scalar product of the embedded word `v` and the embedded tag `k`:
 
-$$P{word_v | tag_k} = \dfrac{e^{\text{embedded}(word_v) \cdot \text{embedded}(tag_k)}}{\sum_{j=1}^k e^{\text{embedded}(word_j) \cdot \text{embedded}(tag_k)}}$$.
+$$P\{word_v | tag_k\} = \dfrac{e^{\text{embedded}(word_v) \cdot \text{embedded}(tag_k)}}{\sum_{j=1}^k e^{\text{embedded}(word_j) \cdot \text{embedded}(tag_k)}}$$.
 
 
 
