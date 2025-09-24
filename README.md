@@ -33,7 +33,7 @@ The transition matrix $T^{(t)}$ at the time step $t$ is augmented with $h_t$, a 
 ## Emission architecture
 The emission probability of producing the word `v` given the tag`k` is computed as a normalized scalar product of the embedded word `v` and the embedded tag `k`:
 
-$$P\{word_v | tag_k\} = \dfrac{e^{\text{embedded}(word_v) \cdot \text{embedded}(tag_k)}}{\sum_{j=1}^k e^{\text{embedded}(word_j) \cdot \text{embedded}(tag_k)}}$$.
+$$P(word_v | tag_k) = \dfrac{e^{\text{embedded}(word_v) \cdot \text{embedded}(tag_k)}}{\sum_{j=1}^k e^{\text{embedded}(word_j) \cdot \text{embedded}(tag_k)}}$$.
 
 
 
