@@ -11,7 +11,7 @@ The dataset used for training the model consists of 80 small sentence-tag pairs 
 
 The dataset is listed in [data/data.py](https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/data/data.py) file.
 
-# Data preprocessing
+## Data preprocessing
 The project utilizes three vocabulary classes: `char_vocab`, `word_vocab`, and `tag_vocab`, defined in [data/preprocessing.py](https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/data/preprocessing.py), which are used to preprocess raw sentences and tags.
 
 # Word and tag embeddings
