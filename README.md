@@ -38,6 +38,12 @@ $$P(word_v | tag_k) = \dfrac{e^{\text{embedded}(word_v) \cdot \text{embedded}(ta
 
 
 # Training
+The loss function is the sum of cross-entropy losses between transiton, and the sum of cross-entropy losses between 
+batch_loss = loss(transitions, batch_tags[:, 1:].reshape(Nb * (L_sentence - 1))) + \
+                         loss(emissions, batch_sentences.reshape(Nb * L_sentence, ))
+$$$$
+
+Training is done in batches of `Nb=4`, in `N_epoch=5000`  
 
 # Inference
 
