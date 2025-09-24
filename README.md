@@ -32,7 +32,7 @@ Model parameters, transition and emission probability matrices A and B, are lear
 
 ## Emission architecture
 The emission probability of producing the word `v` given the tag`k` is computed as a normalized scalar product of the embedded word `v` and the embedded tag `k`:
-$$P{word_v | tag_k} = \dfrac{e^{embedded(word_v) * embedded(tag_k)}}{\sum_j=1^k e^{embedded(word_j) * embedded(tag_k)}}$$
+$$P{word_v | tag_k} = \dfrac{e^{\text{embedded}(word_v) * \text{embedded}(tag_k)}}{\sum_{j=1}^k e^{\text{embedded}(word_j) * \text{embedded}(tag_k)}}$$
 
 # Training
 
