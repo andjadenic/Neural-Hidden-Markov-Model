@@ -9,7 +9,7 @@ Part-of-speech tagging is a fully supervised learning task because we have a cor
 This project uses the model architecture described in the paper [Tran, Ke, et al. "Unsupervised neural hidden Markov models." (2016)](https://arxiv.org/abs/1609.09007).
 
 # Dataset
-The dataset used for training the model consists of 80 small sentence-tag pairs that imitate the WSJ corpus.
+The dataset used for training the model consists of 80 small sentence-tag pairs that imitate the WSJ corpus. This is **supervised learning**.
 
 The dataset is listed in [data/data.py](https://github.com/andjadenic/Neural-Hidden-Markov-Model/blob/master/data/data.py) file.
 
