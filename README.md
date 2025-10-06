@@ -1,4 +1,5 @@
-# Goal
+# Neural Hidden Markov Model
+## Goal
 The goal of this project is to automate **part-of-speech tagging**, the process of identifying a word in a text as a noun, verb, adjective, adverb, etc., based on both its definition and its context.
 
 Part-of-speech tagging is a fully supervised learning task because we have a corpus of words labeled with the correct part-of-speech tag.
